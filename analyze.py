@@ -8,8 +8,19 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / 'results'
 OUT.mkdir(exist_ok=True)
 FS = 5000
-T = 299.0
-ETA = 8.75e-4
+def water_viscosity(temp_c):
+    return 2.414e-5 * 10 ** (247.8 / (temp_c + 133.15))
+
+temperature_files = sorted((ROOT / 'data/floating_bead').rglob('*.txt'))
+temperatures_f = np.array([float(re.search(r'_ltemp_([0-9.,]+)_stemp', f.name).group(1).replace(',', '.')) for f in temperature_files])
+TEMP_MEAN_F = temperatures_f.mean()
+TEMP_SD_F = temperatures_f.std(ddof=1)
+TEMP_MEAN_C = (TEMP_MEAN_F - 32) * 5 / 9
+T = TEMP_MEAN_C + 273.15
+ETA = water_viscosity(TEMP_MEAN_C)
+ETA_SIGMA = (water_viscosity(TEMP_MEAN_C - TEMP_SD_F * 5 / 9) - water_viscosity(TEMP_MEAN_C + TEMP_SD_F * 5 / 9)) / (2 * ETA)
+print(f'Temperature: n={len(temperatures_f)}, mean={TEMP_MEAN_F:.4f} F, SD={TEMP_SD_F:.4f} F, range={temperatures_f.min():.1f}-{temperatures_f.max():.1f} F')
+print(f'Water viscosity at mean temperature: {ETA:.6g} Pa s; relative sigma from +-1 SD: {ETA_SIGMA*100:.3f}%')
 STAGE = 2e-6
 KB = 1.380649e-23
 DIAMETERS = {1: 1.05e-6, 3: 3.17e-6}
@@ -97,6 +108,7 @@ for file in sorted((ROOT / 'data/floating_bead').rglob('*.txt')):
 
 data = pd.DataFrame(rows).sort_values(['size_folder', 'current_mA', 'axis'])
 data.to_csv(OUT / 'measurements.csv', index=False)
+pd.DataFrame([dict(n_recordings=len(temperatures_f), mean_F=TEMP_MEAN_F, sd_F=TEMP_SD_F, min_F=temperatures_f.min(), max_F=temperatures_f.max(), mean_K=T, eta_Pa_s=ETA, eta_rel_sigma=ETA_SIGMA)]).to_csv(OUT / 'temperature_viscosity.csv', index=False)
 files = data.file.unique()
 arr = data.reset_index(drop=True)
 record_groups = [arr.index[arr.file == f].to_numpy() for f in files]
@@ -107,7 +119,7 @@ idx = np.array([
     np.concatenate([record_groups[i] for i in draw])
     for draw in draws
 ])
-eta_factor = 1 + RNG.normal(0, 0.015, size=N)
+eta_factor = 1 + RNG.normal(0, ETA_SIGMA, size=N)
 correction = np.ones((N, len(arr))) * eta_factor[:, None]
 for size in (1, 3):
     d_factor = (DIAMETERS[size] + RNG.normal(0, 0.005e-6, N)) / DIAMETERS[size]

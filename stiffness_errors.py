@@ -47,7 +47,7 @@ for file in measurements.file.unique():
         sigma_fc = np.std(corners, ddof=1) / np.sqrt(5)
         alpha = row.alpha_pN_um
         sigma_fit = alpha * sigma_fc / row.corner_frequency_Hz
-        sigma_eta = alpha * 0.015
+        sigma_eta = alpha * float(pd.read_csv(out / 'temperature_viscosity.csv').eta_rel_sigma.iloc[0])
         sigma_d = alpha * 0.005 / row.bead_um
         rows.append(dict(file=file, axis=axis, bead_um=row.bead_um,
                          current_mA=row.current_mA, f0_Hz=row.corner_frequency_Hz,
